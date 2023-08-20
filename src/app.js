@@ -32,13 +32,13 @@ app.post("/participants", async (request,response) => {
 
     const validation = participantsSchema.validate(request.body);
     if(validation.error){
-       return request.status(422).send(validation.error.details.map(detail => detail.message));
+       return response.status(422).send(validation.error.details.map(detail => detail.message));
     }
 
     try{
         const participant = await db.collection('participants').findOne({name});
         if (participant){
-            return request.sendStatus(409);
+            return response.sendStatus(409);
         }
 
         const timenow = Date.now()
@@ -52,10 +52,19 @@ app.post("/participants", async (request,response) => {
             time: dayjs(timenow).format('HH:mm:ss')
         }
         await db.collection('messages').insertOne(message)
-        request.sendStatus(201);
+        response.sendStatus(201);
 
     } catch (err) {
-        request.statusCode(500).send(err.message);
+        response.statusCode(500).send(err.message);
+    }
+})
+
+app.get("/participants", async (request, response) =>{
+    try {
+        const participants = await db.collection('participants').find().toArray();
+        response.send(participants);
+    } catch (err){
+        response.status(500).send(err.message);
     }
 })
 
