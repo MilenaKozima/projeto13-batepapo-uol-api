@@ -1,8 +1,9 @@
-import express from 'express';
+import express, { response } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { MongoClient } from 'mongodb';
 import Joi from 'joi';
+import dayjs from 'dayjs';
 
 // criando a aplicação servidora
 const app = express();
@@ -104,6 +105,80 @@ app.post("/messages", async (request,response) => {
     }
 
 })
+
+app.get("/messages", async (request, response) =>{
+
+    const {user} = request.headers
+    const {limit} = request.query
+
+    if(limit !== undefined && (Number(limit) <= 0 || isNaN(Number(limit)))){
+        return response.sendStatus(422);
+    }
+
+    try{
+        const messages = await db.collection('messages')
+        .find({ $or: [{from: user}, {to: user}, {type: "message"}, {to: "Todos"}]})
+        .sort({ time: -1})
+        .limit(limit === undefined ? 0 : Number(limit))
+        .toArray()
+        response.send(messages);
+    }catch (err){
+        response.status(500).send(err.message);
+    }
+})
+
+app.post("/status", async (request,response) => {
+const {user} = request.headers
+
+if (!user) {
+    return response.sendStatus(404);
+}
+
+try{
+    const participant = await db.collection('participants').findOne({name: user})
+    if(!participant){
+        return response.sendStatus(404)
+    }
+
+    await db.collection('participants').updateOne(
+        {name: user}, {$set: {lastStatus: Date.now()}}    
+    )
+
+    response.sendStatus(200);
+
+}catch(err){
+    response.status(500).send(err.message)
+}
+})
+
+setInterval(async () => {
+    const tensec = Date.now()-10000;
+
+    try{
+        const inactive = await db.collection("participants")
+        .find({lastStatus: {$lt: tensec}})
+        .toArray()
+
+        if(inactive.length >0){
+            const messages = inactive.map(user => {
+                return {
+                    from: user.name,
+                    to: 'Todos',
+                    text: 'sai da sala...',
+                    type: 'status',
+                    time: dayjs().format('HH:mm:ss')
+            }
+            })
+
+            await db.collection('messages').insertMany(messages)
+            await db.collection('participants').deleteMany({lastStatus: {$lt: tensec}})
+        }
+
+    }catch(err){
+        console.log(err)
+    }
+
+}, 15000)
 
 //ouvir na porta 5000
 const PORT = 5000;
