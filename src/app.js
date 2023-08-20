@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { MongoClient } from 'mongodb';
+import Joi from 'joi';
 
 // criando a aplicação servidora
 const app = express();
@@ -16,17 +17,47 @@ const mongoClient = new MongoClient(process.env.DATABASE_URL)
 try{
     mongoClient.connect()
     console.log("MongoDB conectado")
-} catch(error){
-    console.log(error.message)
+} catch(err){
+    console.log(err.message)
 }
 
 const db = mongoClient.db();
 
-//rotas - endpoints
-app.get("/participants", (request,response) => {
-    response.send("Tudo ok");
-})
+//Schemas
+const participantsSchema = Joi.object({ name: Joi.string().required()});
 
+//rotas - endpoints
+app.post("/participants", async (request,response) => {
+    const { name } = request.body;
+
+    const validation = participantsSchema.validate(request.body);
+    if(validation.error){
+       return request.status(422).send(validation.error.details.map(detail => detail.message));
+    }
+
+    try{
+        const participant = await db.collection('participants').findOne({name});
+        if (participant){
+            return request.sendStatus(409);
+        }
+
+        const timenow = Date.now()
+        await db.collection('participants').insertOne({name, lastStatus:timenow})
+
+        const message = {
+            from: name,
+            to: 'Todos',
+            text: 'entra na sala...',
+            type: 'status',
+            time: dayjs(timenow).format('HH:mm:ss')
+        }
+        await db.collection('messages').insertOne(message)
+        request.sendStatus(201);
+
+    } catch (err) {
+        request.statusCode(500).send(err.message);
+    }
+})
 
 //ouvir na porta 5000
 const PORT = 5000;
