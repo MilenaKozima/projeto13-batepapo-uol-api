@@ -25,6 +25,12 @@ const db = mongoClient.db();
 
 //Schemas
 const participantsSchema = Joi.object({ name: Joi.string().required()});
+const messageSchema = Joi.object({
+    from:Joi.string().required(),
+    to: Joi.string().required(),
+    text: Joi.string().required(),
+    type: Joi.string().required().valid("message", "private_message")
+})
 
 //rotas - endpoints
 app.post("/participants", async (request,response) => {
@@ -66,6 +72,37 @@ app.get("/participants", async (request, response) =>{
     } catch (err){
         response.status(500).send(err.message);
     }
+})
+
+app.post("/messages", async (request,response) => {
+    const {to, text, type} = request.body;
+    const {user} = request.headers;
+    
+    const validation = messageSchema.validate({...request.body, from: user});
+    if(validation.error){
+       return response.status(422).send(validation.error.details.map(detail => detail.message));
+    }
+
+    try{
+        const participant = await db.collection('participants').findOne({name: user})
+        if(!participant){
+            return response.sendStatus(422)
+        }
+
+        const message = {
+            from: user, 
+            to, 
+            text, 
+            type, 
+            time: dayjs().format('HH:mm:ss')
+        }
+        await db.collection('messages').insertOne(message)
+        response.sendStatus(201);
+
+    }catch(err){
+        response.status(500).send(err.message);
+    }
+
 })
 
 //ouvir na porta 5000
