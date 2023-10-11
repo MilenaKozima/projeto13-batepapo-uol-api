@@ -9,7 +9,7 @@ import dayjs from 'dayjs';
 const app = express();
 
 //configurações
-app.use(cors);
+app.use(cors());
 app.use(express.json());
 dotenv.config();
 
@@ -32,6 +32,9 @@ const messageSchema = Joi.object({
     text: Joi.string().required(),
     type: Joi.string().required().valid("message", "private_message")
 })
+
+
+
 
 //rotas - endpoints
 app.post("/participants", async (request,response) => {
